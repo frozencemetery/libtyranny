@@ -1,5 +1,12 @@
 /* SPDX-License-Identifier: MPL-2.0 */
 
+#ifdef __cplusplus
+extern "C" {
+#if 0
+}
+#endif
+#endif
+
 #pragma once
 
 #include <stdint.h>
@@ -42,6 +49,13 @@ void y_dump_tree(y_value *v);
 
 /* Free a parsed tree. */
 void y_free_tree(y_value *v);
+
+#ifdef __cplusplus
+#if 0
+{
+#endif
+}
+#endif
 
 /* Local variables: */
 /* c-basic-offset: 4 */
