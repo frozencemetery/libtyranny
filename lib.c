@@ -2,6 +2,7 @@
 
 #include "tyranny.h"
 
+#include <stdbool.h>
 #include <string.h>
 
 /* Uncomment to enable debug printing. */
@@ -317,6 +318,124 @@ y_value *y_parse_yaml(const char *filename) {
     yaml_parser_delete(&parser);
     fclose(fp);
     return value;
+}
+
+/* Internal, recursive lookup. */
+static const y_value *fetch(y_value *tree, const char *query,
+                            uint8_t match_behavior) {
+    size_t index = 0, key_len;
+    const char *key;
+    y_value *match = NULL;
+
+    if (*query == '\0') {
+        return tree;
+    } else if (tree->type == Y_UNINITIALIZED) {
+        warn("internal error - unexpected unitialized node");
+        return NULL;
+    } else if (tree->type == Y_STRING) {
+        warn("reached terminal node, but query is not exhausted");
+        return NULL;
+    } else if (tree->type == Y_ARRAY) {
+        if (*query != '[') {
+            warn("type mismatch: expected ARRAY, but query disagreed");
+            return NULL;
+        }
+
+        for (query++; *query != ']'; query++) {
+            index *= 10;
+            index += *query - '0';
+        }
+        query++; /* eat ']' */
+
+        for (size_t i = 0; i < index; i++) {
+            if (tree->array[i] == NULL) {
+                warn("index %ld is beyond array bounds (%ld elements)",
+                     index, i);
+                return NULL;
+            }
+        }
+        return fetch(tree->array[index], query, match_behavior);
+    }
+
+    /* dict. */
+    if (*query != '.') {
+        warn("type mismatch: expected DICT, but query disagreed");
+        return NULL;
+    }
+    query++;
+
+    for (key = query; *query != '.' && *query != '[' && *query != '\0';
+         query++);
+    key_len = (size_t)query - (size_t)key;
+
+    for (size_t i = 0; tree->dict.keys[i] != NULL; i++) {
+        if (strncmp(key, tree->dict.keys[i], key_len) ||
+            tree->dict.keys[i][key_len] != '\0') {
+            continue;
+        } else if (match_behavior == Y_MATCH_ERROR && match != NULL) {
+            warn("duplicate matching keys in dict for %s",
+                 tree->dict.keys[i]);
+            return NULL;
+        }
+        match = tree->dict.values[i];
+        if (match_behavior == Y_MATCH_FIRST) {
+            break;
+        }
+    }
+    if (match == NULL) {
+        return NULL;
+    }
+    return fetch(match, query, match_behavior);
+}
+
+const y_value *y_get(y_value *tree, const char *query,
+                     uint8_t match_behavior) {
+    bool in_array = false;
+
+    if (tree == NULL || query == NULL || match_behavior > Y_MATCH_ERROR) {
+        return NULL;
+    }
+
+    /* Quick validity check. */
+    for (size_t i = 0; query[i] != '\0'; i++) {
+        if (query[i] == '[') {
+            if (in_array) {
+                warn("query has mismatched delimiters ('[' inside '[')");
+                return NULL;
+            }
+            in_array = true;
+
+            if (query[i + 1] == ']') {
+                warn("query contains invalid subsequence []");
+                return NULL;
+            }
+            continue;
+        } else if (query[i] == ']') {
+            if (!in_array) {
+                warn("query has mismatched delimiters (unexpected ']')");
+                return NULL;
+            }
+            in_array = false;
+            continue;
+        } else if (in_array && (query[i] < '0' || query[i] > '9')) {
+            warn("query has invalid character for array access '%c'",
+                 query[i]);
+            return NULL;
+        }
+    }
+    if (in_array) {
+        warn("query is missing closing delimiter for array access");
+    }
+    return fetch(tree, query, match_behavior);
+}
+
+const char *y_getstr(y_value *tree, const char *query,
+                     uint8_t match_behavior) {
+    const y_value *ret = y_get(tree, query, match_behavior);
+    if (ret == NULL || ret->type != Y_STRING) {
+        return NULL;
+    }
+    return ret->string;
 }
 
 /* Local variables: */
