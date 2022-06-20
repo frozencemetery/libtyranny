@@ -36,3 +36,8 @@ libtyranny parses the libyaml stream using a recursive descent approach
 can be readily traversed.  The base type is string (`char *`) since, due to
 YAML's bare words, there's no way to determine whether a scalar "should be" a
 string, number, boolean, etc..
+
+Everything is expected to work pretty much as expected, with the exception of
+tags and anchors.  Tags and anchors aren't supported because I have yet to see
+them used at all (let alone reasonably) in the wild... and also because I got
+bored and wanted to do something else.  Patches for this are permissible.
