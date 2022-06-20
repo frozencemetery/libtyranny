@@ -205,6 +205,7 @@ static y_value *p_value(context *context) {
     yaml_token_t token, ptoken;
     y_value *ret = NULL;
     size_t i = 0;
+    bool implicit = false;
 
     while (1) {
         next(context, &token);
@@ -223,7 +224,6 @@ static y_value *p_value(context *context) {
             ret->string = xstrndup((char *)token.data.scalar.value,
                                    token.data.scalar.length);
 
-            yaml_token_delete(&token);
             goto done;
         } else if (token.type == YAML_BLOCK_MAPPING_START_TOKEN ||
                    token.type == YAML_FLOW_MAPPING_START_TOKEN) {
@@ -280,8 +280,11 @@ static y_value *p_value(context *context) {
             }
             goto done;
         } else if (token.type == YAML_BLOCK_SEQUENCE_START_TOKEN ||
-                   token.type == YAML_FLOW_SEQUENCE_START_TOKEN) {
-
+                   token.type == YAML_FLOW_SEQUENCE_START_TOKEN ||
+                   token.type == YAML_BLOCK_ENTRY_TOKEN) {
+            if (token.type == YAML_BLOCK_ENTRY_TOKEN) {
+                implicit = true;
+            }
             ret = xalloc(sizeof(*ret));
             ret->type = Y_ARRAY;
 
@@ -296,6 +299,12 @@ static y_value *p_value(context *context) {
                     /* Sigh.  This type is useless, and optional. */
                     yaml_token_delete(&token);
                     wait_for(context, &token, YAML_BLOCK_ENTRY_TOKEN);
+                } else if (ptoken.type == YAML_KEY_TOKEN) {
+                    /* Oh hello there, implicit block end. */
+                    goto done;
+                } else if (implicit && ptoken.type == YAML_BLOCK_END_TOKEN) {
+                    /* This doesn't belong to us. */
+                    goto done;
                 }
 
                 ret->array[i] = p_value(context);
