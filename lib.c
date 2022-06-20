@@ -45,11 +45,11 @@ static inline char *xstrndup(const char *s, size_t n) {
     return ret;
 }
 
-#define warn(msg, ...)                                                \
-    {                                                                \
-        fprintf(stderr, "warn: %s:%u ", __FILE__, __LINE__);        \
-        fprintf(stderr, msg, ## __VA_ARGS__);                        \
-        fprintf(stderr, "\n");                                        \
+#define warn(msg, ...)                                       \
+    {                                                        \
+        fprintf(stderr, "warn: %s:%u ", __FILE__, __LINE__); \
+        fprintf(stderr, msg, ## __VA_ARGS__);                \
+        fprintf(stderr, "\n");                               \
     }
 
 /* Not only do they not give a method for this awfulness, and not only do
