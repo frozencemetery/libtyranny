@@ -32,7 +32,7 @@ meson install
 ## Technical details
 
 libtyranny parses the libyaml stream using a recursive descent approach
-(without any lookahead).  This cleanly mirrors the output parse tree, which
+(without any backtracking).  This cleanly mirrors the output parse tree, which
 can be readily traversed.  The base type is string (`char *`) since, due to
 YAML's bare words, there's no way to determine whether a scalar "should be" a
 string, number, boolean, etc..

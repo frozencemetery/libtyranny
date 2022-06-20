@@ -13,6 +13,13 @@
 #    define dprintf(...)
 #endif
 
+/* Having a context structure allows one token of lookahead. */
+typedef struct {
+    yaml_parser_t *parser;
+    bool have_lookahead;
+    yaml_token_t token;
+} context;
+
 /* Always 0-initialized, unless the compiler disagrees. */
 static inline void *xalloc(size_t s) {
     void *ret = calloc(1, s);
@@ -150,21 +157,40 @@ void y_free_tree(y_value *v) {
     free(v);
 }
 
-static void next(yaml_parser_t *parser, yaml_token_t *token) {
-    if (yaml_parser_scan(parser, token) == 0) {
+/* Output token is a shallow copy - don't free it. */
+static void peek(context *c, yaml_token_t *token) {
+    if (!c->have_lookahead) {
+        if (yaml_parser_scan(c->parser, &c->token) == 0) {
+            warn("broken document");
+            exit(1);
+        }
+        dprintf("> %s\n", tokname(c->token.type));
+        c->have_lookahead = true;
+    }
+
+    memcpy(token, &c->token, sizeof(*token));
+    return;
+}
+
+static void next(context *c, yaml_token_t *token) {
+    if (c->have_lookahead) {
+        c->have_lookahead = false;
+        memcpy(token, &c->token, sizeof(*token));
+        return;
+    } else if (yaml_parser_scan(c->parser, token) == 0) {
         warn("broken document");
         exit(1);
     }
     dprintf("> %s\n", tokname(token->type));
 }
 
-static void wait_for(yaml_parser_t *parser, yaml_token_t *token,
+static void wait_for(context *c, yaml_token_t *token,
                      yaml_token_type_t target) {
-    next(parser, token);
+    next(c, token);
     while (token->type != YAML_NO_TOKEN && token->type != target) {
         warn("skipping token type %s", tokname(token->type));
         yaml_token_delete(token);
-        next(parser, token);
+        next(c, token);
     }
 }
 
@@ -175,13 +201,13 @@ static void wait_for(yaml_parser_t *parser, yaml_token_t *token,
  * I don't keep track of the difference between block and flow because this is
  * a *parser* and *that's the point*.
  */
-static y_value *p_value(yaml_parser_t *parser) {
-    yaml_token_t token;
+static y_value *p_value(context *context) {
+    yaml_token_t token, ptoken;
     y_value *ret = NULL;
     size_t i = 0;
 
     while (1) {
-        next(parser, &token);
+        next(context, &token);
 
         if (token.type == YAML_BLOCK_END_TOKEN ||
             token.type == YAML_FLOW_SEQUENCE_END_TOKEN ||
@@ -206,7 +232,7 @@ static y_value *p_value(yaml_parser_t *parser) {
 
             while (1) {
                 yaml_token_delete(&token);
-                next(parser, &token);
+                next(context, &token);
                 if (token.type == YAML_BLOCK_END_TOKEN ||
                     token.type == YAML_FLOW_MAPPING_END_TOKEN) {
                     /* Friggin YAML, I tell you hwat. */
@@ -220,7 +246,7 @@ static y_value *p_value(yaml_parser_t *parser) {
                 }
 
                 yaml_token_delete(&token);
-                wait_for(parser, &token, YAML_SCALAR_TOKEN);
+                wait_for(context, &token, YAML_SCALAR_TOKEN);
 
                 /* We're going to write to i. */
                 ret->dict.keys = xrealloc(ret->dict.keys,
@@ -235,12 +261,19 @@ static y_value *p_value(yaml_parser_t *parser) {
                                              token.data.scalar.length);
 
                 yaml_token_delete(&token);
-                wait_for(parser, &token, YAML_VALUE_TOKEN);
+                wait_for(context, &token, YAML_VALUE_TOKEN);
 
-                ret->dict.values[i] = p_value(parser);
-                if (ret->dict.values[i] == NULL) {
-                    /* Failed to parse value, but ate BLOCK_END. */
-                    goto done;
+                peek(context, &ptoken);
+                if (ptoken.type == YAML_KEY_TOKEN) {
+                    /* And this right here is the reason we need a lookahead
+                     * (key, scalar, value, key).  Really dubious behavior. */
+                    ret->dict.values[i] = NULL;
+                } else {
+                    ret->dict.values[i] = p_value(context);
+                    if (ret->dict.values[i] == NULL) {
+                        /* Recursion eats the block end. */
+                        goto done;
+                    }
                 }
 
                 i++;
@@ -251,7 +284,7 @@ static y_value *p_value(yaml_parser_t *parser) {
             if (token.type == YAML_BLOCK_SEQUENCE_START_TOKEN) {
                 /* Only block sequence, not flow, and not no-seq.  Why. */
                 yaml_token_delete(&token);
-                wait_for(parser, &token, YAML_BLOCK_ENTRY_TOKEN);
+                wait_for(context, &token, YAML_BLOCK_ENTRY_TOKEN);
             }
 
             ret = xalloc(sizeof(*ret));
@@ -263,7 +296,7 @@ static y_value *p_value(yaml_parser_t *parser) {
                                       (i + 2) * sizeof(ret->array));
                 ret->array[i + 1] = NULL;
 
-                ret->array[i] = p_value(parser);
+                ret->array[i] = p_value(context);
                 if (ret->array[i] == NULL) {
                     /* Yes, it's slightly larger.  No, I don't care. */
                     break;
@@ -288,6 +321,7 @@ y_value *y_parse_yaml(const char *filename) {
     FILE *fp = NULL;
     yaml_parser_t parser;
     yaml_token_t token;
+    context context = { 0 };
     y_value *value;
 
     if (filename == NULL) {
@@ -300,6 +334,7 @@ y_value *y_parse_yaml(const char *filename) {
         warn("yaml_parser_initialize");
         return NULL;
     }
+    context.parser = &parser;
 
     fp = fopen(filename, "r");
     if (fp == NULL) {
@@ -310,10 +345,10 @@ y_value *y_parse_yaml(const char *filename) {
     yaml_parser_set_input_file(&parser, fp);
 
     /* I don't want to handle aliases.  Don't do that. */
-    wait_for(&parser, &token, YAML_STREAM_START_TOKEN);
+    wait_for(&context, &token, YAML_STREAM_START_TOKEN);
     yaml_token_delete(&token);
 
-    value = p_value(&parser);
+    value = p_value(&context);
 
     yaml_parser_delete(&parser);
     fclose(fp);
