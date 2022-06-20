@@ -281,11 +281,6 @@ static y_value *p_value(context *context) {
             goto done;
         } else if (token.type == YAML_BLOCK_SEQUENCE_START_TOKEN ||
                    token.type == YAML_FLOW_SEQUENCE_START_TOKEN) {
-            if (token.type == YAML_BLOCK_SEQUENCE_START_TOKEN) {
-                /* Only block sequence, not flow, and not no-seq.  Why. */
-                yaml_token_delete(&token);
-                wait_for(context, &token, YAML_BLOCK_ENTRY_TOKEN);
-            }
 
             ret = xalloc(sizeof(*ret));
             ret->type = Y_ARRAY;
@@ -295,6 +290,13 @@ static y_value *p_value(context *context) {
                 ret->array = xrealloc(ret->array,
                                       (i + 2) * sizeof(ret->array));
                 ret->array[i + 1] = NULL;
+
+                peek(context, &ptoken);
+                if (ptoken.type == YAML_BLOCK_ENTRY_TOKEN) {
+                    /* Sigh.  This type is useless, and optional. */
+                    yaml_token_delete(&token);
+                    wait_for(context, &token, YAML_BLOCK_ENTRY_TOKEN);
+                }
 
                 ret->array[i] = p_value(context);
                 if (ret->array[i] == NULL) {
