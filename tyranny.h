@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: MPL-2.0 */
+/* Copyright the libtyranny contributors */
 
 #ifdef __cplusplus
 extern "C" {

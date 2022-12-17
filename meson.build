@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: MPL-2.0
+# Copyright the libtyranny contributors
 
 project('libtyranny', 'c',
 	version: '1.0.0',
