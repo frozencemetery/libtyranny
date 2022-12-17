@@ -65,8 +65,7 @@ const y_value *y_get(y_value *tree, const char *query,
  * library doesn't have one. */
 const char *y_tok_type_name(yaml_token_type_t t);
 
-/* Read a file and yield a parsed tree.  NULL indicates failure, but
- * malformed documents may just call exit. */
+/* Read a file and yield a parsed tree.  NULL indicates failure. */
 y_value *y_parse_yaml(const char *filename);
 
 /* Print out a parsed tree to stdout in a json-esque format. */

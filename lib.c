@@ -158,18 +158,18 @@ void y_free_tree(y_value *v) {
 }
 
 /* Output token is a shallow copy - don't free it. */
-static void peek(context *c, yaml_token_t *token) {
+static bool peek(context *c, yaml_token_t *token) {
     if (!c->have_lookahead) {
         if (yaml_parser_scan(c->parser, &c->token) == 0) {
             warn("broken document");
-            exit(1);
+            return true;
         }
         dprintf("> %s\n", tokname(c->token.type));
         c->have_lookahead = true;
     }
 
     memcpy(token, &c->token, sizeof(*token));
-    return;
+    return false;
 }
 
 static void next(context *c, yaml_token_t *token) {
@@ -263,7 +263,11 @@ static y_value *p_value(context *context) {
                 yaml_token_delete(&token);
                 wait_for(context, &token, YAML_VALUE_TOKEN);
 
-                peek(context, &ptoken);
+                if (peek(context, &ptoken)) {
+                    free(ret);
+                    ret = NULL;
+                    goto done;
+                }
                 if (ptoken.type == YAML_KEY_TOKEN) {
                     /* And this right here is the reason we need a lookahead
                      * (key, scalar, value, key).  Really dubious behavior. */
@@ -294,7 +298,11 @@ static y_value *p_value(context *context) {
                                       (i + 2) * sizeof(ret->array));
                 ret->array[i + 1] = NULL;
 
-                peek(context, &ptoken);
+                if (peek(context, &ptoken)) {
+                    free(ret);
+                    ret = NULL;
+                    goto done;
+                }
                 if (ptoken.type == YAML_BLOCK_ENTRY_TOKEN) {
                     /* Sigh.  This type is useless, and optional. */
                     yaml_token_delete(&token);
