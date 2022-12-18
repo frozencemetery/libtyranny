@@ -165,7 +165,12 @@ static bool peek(context *c, yaml_token_t *token) {
             warn("broken document");
             return true;
         }
-        dprintf("> %s\n", tokname(c->token.type));
+        dprintf("> %s", tokname(c->token.type));
+        if (c->token.type == YAML_SCALAR_TOKEN) {
+            dprintf(" \"%*s\"", (int)c->token.data.scalar.length,
+                    c->token.data.scalar.value);
+        }
+        dprintf("\n");
         c->have_lookahead = true;
     }
 
@@ -182,7 +187,12 @@ static void next(context *c, yaml_token_t *token) {
         warn("broken document");
         exit(1);
     }
-    dprintf("> %s\n", tokname(token->type));
+    dprintf("> %s", tokname(token->type));
+    if (token->type == YAML_SCALAR_TOKEN) {
+        dprintf(" \"%*s\"", (int)token->data.scalar.length,
+                token->data.scalar.value);
+    }
+    dprintf("\n");
 }
 
 static void wait_for(context *c, yaml_token_t *token,
@@ -197,7 +207,7 @@ static void wait_for(context *c, yaml_token_t *token,
 
 /* Terminology:
  * - "block" is the weird yaml-y way of writing things; "flow" is json
- *  - "sequence" is array; "mapping" is dict
+ * - "sequence" is array; "mapping" is dict
  *
  * I don't keep track of the difference between block and flow because this is
  * a *parser* and *that's the point*.
