@@ -398,11 +398,9 @@ static const y_value *fetch(y_value *tree, const char *query,
         warn("internal error - unexpected unitialized node");
         return NULL;
     } else if (tree->type == Y_STRING) {
-        warn("reached terminal node, but query is not exhausted");
         return NULL;
     } else if (tree->type == Y_ARRAY) {
         if (*query != '[') {
-            warn("type mismatch: expected ARRAY, but query disagreed");
             return NULL;
         }
 
@@ -414,8 +412,6 @@ static const y_value *fetch(y_value *tree, const char *query,
 
         for (size_t i = 0; i < index; i++) {
             if (tree->array[i] == NULL) {
-                warn("index %ld is beyond array bounds (%ld elements)",
-                     index, i);
                 return NULL;
             }
         }
@@ -424,7 +420,6 @@ static const y_value *fetch(y_value *tree, const char *query,
 
     /* dict. */
     if (*query != '.') {
-        warn("type mismatch: expected DICT, but query disagreed");
         return NULL;
     }
     query++;
