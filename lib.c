@@ -227,8 +227,10 @@ static y_value *p_value(context *context) {
             token.type == YAML_NO_TOKEN) {
             /* 4 ways to start a block, but only 3 to end it.  Great job. */
             goto done;
-        } else if (token.type == YAML_FLOW_ENTRY_TOKEN) {
-            /* Not a helpful token type to have.  Next. */
+        } else if (token.type == YAML_FLOW_ENTRY_TOKEN ||
+                   token.type == YAML_DOCUMENT_START_TOKEN) {
+            /* These tokens don't mean anything to us. */
+            continue;
         } else if (token.type == YAML_SCALAR_TOKEN) {
             ret = xalloc(sizeof(*ret));
             ret->type = Y_STRING;
