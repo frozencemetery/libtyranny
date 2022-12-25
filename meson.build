@@ -10,15 +10,22 @@ project('libtyranny', 'c',
 	])
 
 # For strndup
-add_global_arguments('-D_POSIX_C_SOURCE=200809L', language: 'c')
+if not meson.is_subproject()
+    add_global_arguments('-D_POSIX_C_SOURCE=200809L', language: 'c')
+endif
 
 yaml = dependency('yaml-0.1', required: true)
 deps = [yaml]
-libtyranny = library('tyranny', 'lib.c', 'tyranny.h',
+inc = include_directories('.')
+libtyranny = library('tyranny', 'lib.c',
+		     include_directories: inc,
 		     dependencies: deps,
 		     install: true)
 pkg = import('pkgconfig')
 pkg.generate(libtyranny)
+
+libtyranny_dep = declare_dependency(include_directories: inc,
+				    link_with: libtyranny)
 
 install_headers('tyranny.h')
 
